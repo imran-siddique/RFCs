@@ -50,15 +50,18 @@ leaf = SHA-256(0x00 || canonical_bytes)
 
 **Tree.** Interior nodes are `SHA-256(0x01 || left || right)` over 32-byte child hashes. Construction proceeds level by level over the ordered leaves. When a level has an odd number of nodes the final node is promoted unchanged rather than duplicated, which yields the same tree as the RFC 6962 recursive split at the largest power of two. The `0x00` and `0x01` prefixes are domain separation and prevent an interior node being presented as a leaf. An empty batch is invalid and must be rejected.
 
-**Entry.** Each anchored batch is one line of newline-delimited JSON in a dated file, with five fields:
+**Entry.** Each anchored batch is one line of newline-delimited JSON in a dated file, with six fields:
 
 | Field | Type | Meaning |
 | ----- | ---- | ------- |
 | `ts` | string | Anchoring time, ISO-8601 UTC |
 | `merkle_root` | string | `sha256:` followed by 64 lowercase hex characters |
 | `leaf_count` | integer | Number of leaves in the batch, at least 1 |
+| `canonicalization` | string | Identifier of the rule that produced this batch's leaves |
 | `producer` | string | Party that produced and submitted the batch |
 | `batch_id` | string | Producer-scoped unique identifier |
+
+The `canonicalization` field records which rule built the leaves, in the batch itself. Declaring the rule globally by document revision is enough with a single producer and stops being enough as soon as there are two, or as soon as the rule is revised: entries from either side of the change carry the same fields and mean different things, and an entry cannot be reinterpreted after the fact. Naming the rule at write time costs one string and is the only moment the information is available for free.
 
 Entries are append-only. Files are never rewritten. In the reference implementation the version-control history is the tamper-evidence layer, because rewriting a published entry diverges the commit hashes that auditors and mirrors have already observed. A JSON Schema is enforced in CI on every line of every registry file.
 
@@ -70,7 +73,7 @@ A record is usually canonicalized twice for different purposes, and the two cano
 
 In the reference implementation the signature pre-image uses RFC 8785 JCS, while the anchor leaf uses sorted-key ASCII JSON. Those two agree for records whose keys and strings are ASCII and whose numbers are integers, which describes most records and is exactly why the divergence is dangerous. They part company in at least three places. RFC 8785 emits non-ASCII characters where the anchor format escapes them. RFC 8785 applies ECMAScript number serialization where the anchor format excludes non-integer numbers entirely, because cross-language float serialization is not canonical. RFC 8785 orders object keys by UTF-16 code unit where the anchor format orders by Unicode code point.
 
-A verifier must use the canonicalization declared for the context it is checking. Reusing one for the other is non-conforming even when a particular record happens to produce identical bytes.
+A verifier must use the canonicalization declared for the context it is checking. Reusing one for the other is non-conforming even when a particular record happens to produce identical bytes. For the anchor leaf that declaration is the entry's `canonicalization` field, so a verifier reads the rule off the batch rather than inferring it from the document revision in force when the batch was written.
 
 Any evidence framework SAFE adopts will hit this. It is raised here because it is the class of defect that passes every test written by the implementer and fails the first time a second organization writes its own verifier, which is the moment independent verification was supposed to start working.
 
