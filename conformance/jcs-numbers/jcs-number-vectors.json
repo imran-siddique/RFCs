@@ -293,31 +293,31 @@
       "agree": false
     },
     {
-      "name": "integer-input-has-three-answers",
-      "why": "JCS defers to ECMA-262, which has one number type and it is a double. So serializing an integer is not a well-defined operation: the result depends on whether the implementation converts to double first. A language with only doubles has no choice. A language with big integers can print the exact value and never notice. Both produce well-formed canonical bytes, neither raises, and they disagree. That is worse than the collision above, because a collision is visible to one party holding two objects and one hash, while this is two parties computing different proofs for the same object, each certain it is correct. It is the failure the RFC already names: passes every test the implementer writes and fails the first time a second organization writes its own verifier.",
+      "name": "conformant-serialization-of-an-integer-uses-a-double",
+      "why": "Appendix B note 2 settles what the algorithm does: even where an integer like 2**68 could be regarded as having extended precision, the serialization does not take that into consideration. It is a double. So there is one conformant answer and it is the one with the hazard in it, which is what note 1's SHOULD on producers is protecting against. A SHOULD on producers does not protect a verifier. Two shipped implementations get this wrong in opposite directions: rfc8785 0.1.4 refuses and so never produces the collision, making the deviating implementation the fail-closed one, while a big-integer language that skips the conversion prints the exact value and diverges silently from a conformant implementation on the same object. Neither of those two raises. Both produce well-formed canonical bytes. The leaf hashes differ.",
       "input": {
         "kind": "integer",
         "decimal": "9007199254740993",
-        "context": "as a field value, for example duration_ns, which the TRACE schema leaves unbounded"
+        "context": "as a field value in an evidence object, for example a duration or a byte count"
       },
       "observed": [
         {
-          "implementation": "any language whose only number type is a double, for example V8",
+          "implementation": "conformant: convert to a double, per ECMA-262 7.1.12.1, for example V8",
           "canonical": "9007199254740992",
           "leaf_of_{\"duration_ns\":N}": "f7afd1c9ef1115cf3f6c221d7902b45ecf938aef40bb4bbb5fb508fcb50aacd7"
         },
         {
-          "implementation": "a language with big integers that does not convert first, for example Python int",
+          "implementation": "non-conformant: a big-integer language that skips the conversion, for example Python int",
           "canonical": "9007199254740993",
           "leaf_of_{\"duration_ns\":N}": "c33ee17dd1cabb136db8754d4cfdaafed905f330c6b3336ecf2272409076f102"
         },
         {
-          "implementation": "rfc8785 (Python) 0.1.4",
+          "implementation": "non-conformant: rfc8785 (Python) 0.1.4, refuses",
           "canonical": "REFUSED (IntegerDomainError)",
           "leaf_of_{\"duration_ns\":N}": null
         }
       ],
-      "note": "No answer asserted. Deciding the integer domain decides this too, and this is the case that shows why leaving it implicit is not neutral."
+      "note": "No answer asserted. What to do about a conformant collision is a question for the working group, not something a vector set should encode quietly."
     }
   ],
   "how_this_set_was_checked": {

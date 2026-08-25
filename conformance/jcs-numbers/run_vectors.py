@@ -40,7 +40,13 @@ for v in doc["pending_working_group"]:
     kind = v["input"]["kind"]
     if kind == "integer":
         got, err = attempt(int(v["input"]["decimal"]))
-        print("  %-34s spec %-24s here %s" % (v["name"], v["expect_per_spec"], got or err))
+        spec = v.get("expect_per_spec")
+        if spec:
+            print("  %-46s spec %-24s here %s" % (v["name"], spec, got or err))
+        else:
+            print("  %-46s here %s" % (v["name"], got or err))
+            for o in v.get("observed", []):
+                print("      %-72s %s" % (o["implementation"], o["canonical"]))
     elif kind == "pair-of-objects":
         a, b = 9007199254740992, 9007199254740993
         ga, ea = attempt(a)
