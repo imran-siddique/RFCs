@@ -1,15 +1,28 @@
-"""Run the vectors against any JCS number serializer.
+"""Run the vectors against any JCS number serializer, and the admission profile
+against any admission check.
 
     python run_vectors.py jcs-number-vectors.json
 
 Point `serialize` at whatever produces the canonical form of a single number.
-The default uses the rfc8785 package if it is installed.
+The default uses the rfc8785 package if it is installed. Point `admit` at
+whatever decides whether a JSON number token is admissible in an evidence
+object; the default is the reference check described in the file.
 """
 import json, struct, sys
+from decimal import Decimal
+
+SAFE = 2 ** 53 - 1
 
 def serialize(x):
     import rfc8785
     return rfc8785.dumps(x).decode()
+
+def admit(token):
+    """Reference admission check: parse the token exactly, then test value, not spelling."""
+    x = Decimal(token)
+    if x != x.to_integral_value():
+        return True
+    return abs(x) <= SAFE
 
 def as_double(hex_be):
     return struct.unpack(">d", int(hex_be, 16).to_bytes(8, "big"))[0]
@@ -35,18 +48,23 @@ for v in doc["settled"]:
     print("%-5s %-40s expect %-24s got %s" % ("ok" if ok else "FAIL", v["name"], v["expect"], got or err))
 print("\n%d of %d settled vectors pass" % (len(doc["settled"]) - failed, len(doc["settled"])))
 
-print("\npending, no answer asserted:")
-for v in doc["pending_working_group"]:
+prof = doc["admission_profile"]
+print("\nadmission profile %s (%s):" % (prof["name"], prof["status"]))
+afailed = 0
+for c in prof["cases"]:
+    got = "admit" if admit(c["input"]["token"]) else "reject"
+    ok = got == c["expect"]
+    afailed += not ok
+    print("%-5s %-32s %-28s expect %-6s got %s" % ("ok" if ok else "FAIL", c["name"], c["input"]["token"], c["expect"], got))
+print("\n%d of %d admission cases pass" % (len(prof["cases"]) - afailed, len(prof["cases"])))
+
+print("\nobservations, what this serializer does with out-of-range integers:")
+for v in doc["observations_on_conformant_serialization"]["cases"]:
     kind = v["input"]["kind"]
     if kind == "integer":
         got, err = attempt(int(v["input"]["decimal"]))
         spec = v.get("expect_per_spec")
-        if spec:
-            print("  %-46s spec %-24s here %s" % (v["name"], spec, got or err))
-        else:
-            print("  %-46s here %s" % (v["name"], got or err))
-            for o in v.get("observed", []):
-                print("      %-72s %s" % (o["implementation"], o["canonical"]))
+        print("  %-46s spec %-24s here %s" % (v["name"], spec or "(see observed)", got or err))
     elif kind == "pair-of-objects":
         a, b = 9007199254740992, 9007199254740993
         ga, ea = attempt(a)
@@ -57,3 +75,5 @@ for v in doc["pending_working_group"]:
             print("  %-34s %d -> %s and %d -> %s : %s" % (
                 v["name"], a, ga, b, gb,
                 "COLLIDE, one leaf for two objects" if ga == gb else "distinct"))
+
+sys.exit(1 if (failed or afailed) else 0)
