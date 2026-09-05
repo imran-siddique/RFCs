@@ -8,7 +8,7 @@ end where positional notation gives way to exponential, and the integer domain.
 
 Point `serialize` in the runner at any implementation. It defaults to the
 `rfc8785` package if that is installed. Two suites: fourteen settled
-serialization vectors, and an admission profile of twenty cases that says
+serialization vectors, and an admission profile of twenty-seven cases that says
 which JSON numbers an evidence object may carry at all.
 
 ## Why the expected values can be trusted
@@ -62,10 +62,12 @@ input. Keeping the two apart is what makes both checkable.
 Proposed on `OpenSecureAIAlliance/RFCs#18`, not adopted by the working group.
 The rule:
 
-> Every integer-valued JSON number in an evidence object, whatever its spelling
-> or the host's numeric type, lies within -9007199254740991 to 9007199254740991.
-> A verifier that finds one outside that range rejects the object before
-> canonicalizing it. Numbers that are not integer-valued are outside this rule.
+> Every JSON number in an evidence object is taken as the IEEE 754 binary64
+> value RFC 8785 serializes; a token that does not convert to a finite double is
+> rejected. Every integer-valued such value, whatever the token's spelling or
+> the host's numeric type, lies within -9007199254740991 to 9007199254740991,
+> and a verifier that finds one outside that range rejects the object before
+> canonicalizing it. Values that are not integer-valued are outside this rule.
 
 The bound is 2\*\*53 - 1 rather than 2\*\*53 because a verifier whose only number
 type is the double sees the parsed value, not the instance: it reads
@@ -76,10 +78,21 @@ same value as `9007199254740992` and are rejected with it, and their negative
 counterparts likewise. Since every double of magnitude 2\*\*53 or more is
 integer-valued, the rule admits no JSON number of that magnitude.
 
-The runner's reference check parses each token exactly, as a decimal rather than
-a double, so the expectation is stated on the value the producer wrote. An
-implementation that parses to a double first still gets every case right, because
-each rejected value stays rejected after rounding.
+## The domain is the double, not the token
+
+Admission is decided on the binary64 value, the representation RFC 8785 sections
+3.1 and 3.2.2.3 serialize, and not on the decimal token. The two differ just
+outside the safe range. `9007199254740991.5` is not an integer as a decimal and an
+exact-decimal rule would admit it; as a double it rounds to `9007199254740992`,
+which is what JCS then serializes, and that value is rejected. An exact-decimal
+rule would admit an input whose canonical spelling it rejects. Deciding on the
+double keeps the admission check and the serializer on one representation. Seven
+cases pin this: four outward-rounding tokens that are rejected, two inward-rounding
+controls at `.25` that both rules admit, and `1e999`, which is not finite as a
+double and is rejected before any other test. The runner's reference check
+converts the token to a double, rejects it if not finite, then tests value and
+range; the finite-value predicate in JavaScript is
+`Number.isFinite(v) && (!Number.isInteger(v) || Number.isSafeInteger(v))`.
 
 ## What shipped implementations do with out-of-range integers
 
@@ -121,6 +134,6 @@ its own verifier.
 Conforming exactly is not sufficient here, which is why the range is stated as a
 constraint on the evidence object rather than left to a SHOULD aimed at producers.
 
-The two-suite split and two corrections to the earlier text, that `2**68` is
+The two-suite split, the binary64 domain and two corrections to the earlier text, that `2**68` is
 exactly representable and that `9007199254740992` sits outside the safe range,
 came from review on `OpenSecureAIAlliance/RFCs#18`.

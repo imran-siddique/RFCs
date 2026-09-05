@@ -249,9 +249,9 @@
   "admission_profile": {
     "name": "safe-integer-admission",
     "status": "proposed on OpenSecureAIAlliance/RFCs#18; not adopted by the working group",
-    "rule": "Every integer-valued JSON number in an evidence object, whatever its spelling or the host's numeric type, lies within -9007199254740991 to 9007199254740991. A verifier that finds one outside that range rejects the object before canonicalizing it. Numbers that are not integer-valued are outside this rule. Since every double of magnitude 2**53 or more is integer-valued, the rule admits no JSON number of that magnitude.",
+    "rule": "Every JSON number in an evidence object is taken as the IEEE 754 binary64 value RFC 8785 serializes; a token that does not convert to a finite double is rejected. Every integer-valued such value, whatever the token's spelling or the host's numeric type, lies within -9007199254740991 to 9007199254740991, and a verifier that finds one outside that range rejects the object before canonicalizing it. Values that are not integer-valued are outside this rule. Since every double of magnitude 2**53 or more is integer-valued, the rule admits no JSON number of that magnitude.",
     "why_separate_from_the_serializer_suite": "A serialization vector says what bytes RFC 8785 produces for a value. An admission case says whether an evidence profile accepts that value at all. Six of the fourteen settled vectors serialize correctly and are not admissible here, so a serializer test passing is not evidence that the profile admits the input.",
-    "reference_check": "Parse the token exactly (a decimal, not a double), test whether the value is an integer, then test the range. The runner does this. An implementation that parses to a double first still gets every case in this file right, because each rejected value stays rejected after rounding; the exact parse is so the expectations are stated on the value the producer wrote.",
+    "reference_check": "Convert the token to a double, reject it if the result is not finite, test whether the value is an integer, then test the range. The runner does this. The six rounding cases below are where an exact-decimal check would disagree; the twenty cases before them agree under both.",
     "cases": [
       {
         "name": "boundary-positive",
@@ -432,8 +432,72 @@
         },
         "why": "Integer-valued, in range. Admitted.",
         "expect": "admit"
+      },
+      {
+        "name": "rounds-outward-to-two-to-the-53",
+        "input": {
+          "kind": "json-number-token",
+          "token": "9007199254740991.5"
+        },
+        "why": "Not an integer as a decimal; as a double it rounds to 9007199254740992, which is what JCS serializes. Rejected.",
+        "expect": "reject"
+      },
+      {
+        "name": "rounds-outward-negative",
+        "input": {
+          "kind": "json-number-token",
+          "token": "-9007199254740991.5"
+        },
+        "why": "Negative counterpart. Rejected.",
+        "expect": "reject"
+      },
+      {
+        "name": "rounds-outward-exponent-spelling",
+        "input": {
+          "kind": "json-number-token",
+          "token": "9.0071992547409915e15"
+        },
+        "why": "Same value in exponent form. Rejected.",
+        "expect": "reject"
+      },
+      {
+        "name": "rounds-outward-exponent-negative",
+        "input": {
+          "kind": "json-number-token",
+          "token": "-9.0071992547409915e15"
+        },
+        "why": "Negative counterpart. Rejected.",
+        "expect": "reject"
+      },
+      {
+        "name": "rounds-inward-control",
+        "input": {
+          "kind": "json-number-token",
+          "token": "9007199254740991.25"
+        },
+        "why": "Rounds inward to 9007199254740991 as a double. Admitted under both an exact-decimal and a binary64 check; the control for the pair above.",
+        "expect": "admit"
+      },
+      {
+        "name": "rounds-inward-control-negative",
+        "input": {
+          "kind": "json-number-token",
+          "token": "-9007199254740991.25"
+        },
+        "why": "Negative counterpart. Admitted.",
+        "expect": "admit"
+      },
+      {
+        "name": "not-finite",
+        "input": {
+          "kind": "json-number-token",
+          "token": "1e999"
+        },
+        "why": "Converts to infinity as a double. Rejected before any other test.",
+        "expect": "reject"
       }
-    ]
+    ],
+    "domain": "Admission is decided on the binary64 value, the same representation RFC 8785 sections 3.1 and 3.2.2.3 serialize, not on the decimal token. The two differ just outside the safe range: 9007199254740991.5 is not an integer as a decimal and admissible under an exact-decimal rule, but it rounds to 9007199254740992 as a double, which JCS would then serialize, and that value is rejected. An exact-decimal rule would admit an input whose canonical spelling it rejects. Deciding on the double keeps the admission check and the serializer on one representation."
   },
   "observations_on_conformant_serialization": {
     "note": "These were the pending cases before the admission profile existed. They record what shipped implementations do with out-of-range integers under RFC 8785 itself; the admission profile above is what settles them.",

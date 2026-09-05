@@ -9,7 +9,6 @@ whatever decides whether a JSON number token is admissible in an evidence
 object; the default is the reference check described in the file.
 """
 import json, struct, sys
-from decimal import Decimal
 
 SAFE = 2 ** 53 - 1
 
@@ -18,11 +17,13 @@ def serialize(x):
     return rfc8785.dumps(x).decode()
 
 def admit(token):
-    """Reference admission check: parse the token exactly, then test value, not spelling."""
-    x = Decimal(token)
-    if x != x.to_integral_value():
+    """Reference admission check on the binary64 value RFC 8785 serializes, not on the token."""
+    v = float(token)
+    if v != v or v in (float("inf"), float("-inf")):
+        return False
+    if v != int(v):
         return True
-    return abs(x) <= SAFE
+    return abs(int(v)) <= SAFE
 
 def as_double(hex_be):
     return struct.unpack(">d", int(hex_be, 16).to_bytes(8, "big"))[0]
