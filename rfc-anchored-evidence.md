@@ -161,6 +161,8 @@ Issue #6 proposes signed, offline-recomputable tool-trust verdicts. Those verdic
 
 Issue #4 concerns verification methods that fail open. An anchored record of a verification result does not stop the method failing open, and the two should not be confused.
 
+The companion [Chain-of-Custody Receipt Profile](./rfc-evidence-custody-receipt-profile.md) adds evidence of origin, linked handling transitions, transformations and durable receiver acceptance, together with conformance cases that keep these properties separately assertable. It references this proposal for the anchoring mechanism, statuses, producer basis and their limits. An anchor does not substitute for missing custody evidence, and durable acceptance does not imply temporal anchoring.
+
 # Disclosure
 
 Submitted by Imran Siddique, Opaque Systems. Opaque Systems maintains TRACE, an open specification for verifiable agent evidence records, and the reference registry described here. TRACE is not an adopted standard at any body and this proposal does not ask the alliance to adopt it. The registry is offered as a contribution, including operation and maintenance passing to others, because an accountability layer operated by its own largest producer is the specific thing that does not work.

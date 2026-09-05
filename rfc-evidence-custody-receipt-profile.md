@@ -78,10 +78,17 @@ A conformant implementation should publish machine-runnable variants of at least
 6. **Broken predecessor.** A receipt refers to a missing or mismatched previous digest. Verification reports incomplete continuity and identifies the last valid transition.
 7. **Historical key status.** A validly produced receipt is checked after the signing key is revoked. Verification reports the key status and evaluates the receipt against the declared historical-status method rather than silently accepting or rejecting it.
 8. **Unreferenced access history.** A custodian provides a valid payload and transfer chain but no verifiable access history or declared unavailable state. Verification reports incomplete custody evidence rather than complete custody.
+9. **Accepted but unanchored.** A receiver durably acknowledges the evidence ID and payload digest, while the evidence item's anchoring result is `unanchored`. Verification reports acceptance and the unanchored temporal state separately; acceptance does not upgrade the anchoring result.
+10. **Anchored without acceptance.** A sender's signed transfer-attempt record has a valid anchor, but no durable acknowledgement from the intended receiver is available. The anchor applies to the sender's record; the transfer remains offered or unavailable, not accepted.
+11. **Anchored transformation without a receipt.** A redacted output has a valid anchor, but no transformation receipt links its input and output digests. Verification retains the output's anchoring result and reports a custody gap; anchoring does not establish the missing transformation history or make the output byte-identical to its input.
 
 Each vector should declare the receipt schema and canonicalization version, starting custody state, expected transition, expected availability state and verification method. Simulated, replayed and live transfers must remain distinguishable.
 
 # Relationship to Other Evidence Properties
+
+The companion [Anchored Evidence for SAFE](./rfc-anchored-evidence.md) proposal defines the temporal property, anchoring mechanism and statuses, producer-basis semantics, and the limits of those claims. This custody profile consumes that component's results rather than defining a second anchoring mechanism, status vocabulary or producer-basis classification.
+
+Where anchoring is assessed for a custody receipt or payload, the custody evidence should reference the exact object and its anchoring result and verification evidence under that proposal, including the applicable canonicalization context. A receipt and the payload it names are distinct objects; anchoring one must not be imputed to the other.
 
 Temporal anchoring can prove that a receipt or evidence digest existed by a stated time. It does not prove that the receiver accepted custody. A custody receipt can prove that a named receiver acknowledged a digest. It does not prove that the underlying statement is true or that the producer was independent of the party under review.
 
