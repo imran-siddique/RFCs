@@ -137,3 +137,26 @@ constraint on the evidence object rather than left to a SHOULD aimed at producer
 The two-suite split, the binary64 domain and two corrections to the earlier text, that `2**68` is
 exactly representable and that `9007199254740992` sits outside the safe range,
 came from review on `OpenSecureAIAlliance/RFCs#18`.
+
+## Bundle identity
+
+This directory is a candidate bundle. Its identifier is `jcs-numbers/v0.1.0-candidate.1`, recorded
+in `MANIFEST.json` along with the sha256 of every other file here and the identifier of the
+profile the set exercises.
+
+A published revision takes a new candidate identifier and preserves the prior commit, so a
+citation of one identifier keeps pointing at the bytes it was written against. The commits this
+identifier supersedes are listed in the manifest with what each of them got wrong.
+
+Nothing here is adopted. The admission profile carries its own `status` field saying so, and the
+manifest repeats it, because a bundle that travels separately from the thread it was proposed in
+should not need the thread to say what it claims.
+
+To check the files against the manifest:
+
+```
+python3 -c "import hashlib,json,pathlib;m=json.load(open('MANIFEST.json'));[print(('ok  ' if 'sha256:'+hashlib.sha256(pathlib.Path(n).read_bytes()).hexdigest()==v else 'FAIL'),n) for n,v in m['files'].items()]"
+```
+
+The manifest does not contain its own digest. That digest is what a citation pins, so it is
+published where the bundle is cited rather than inside it.

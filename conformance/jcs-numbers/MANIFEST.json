@@ -1,0 +1,25 @@
+{
+  "candidate": "jcs-numbers/v0.1.0-candidate.1",
+  "status": "proposed on OpenSecureAIAlliance/RFCs#18; not adopted by the working group",
+  "profile_exercised": "safe-integer-admission",
+  "revision_rule": "A published revision takes a new candidate identifier and preserves the prior commit. Files under an identifier that has been cited are not edited in place.",
+  "supersedes": [
+    {
+      "commit": "419cd1b13de3d2670613cf3347f3672be5d71802",
+      "what_changed_after_it": "the runner raised KeyError on the fifth pending case, and the framing called a settled part of RFC 8785 ambiguous"
+    },
+    {
+      "commit": "932491400e15f5cef55c8b31f94e1cd3417db1c0",
+      "what_changed_after_it": "no admission profile existed, and two statements were wrong: that 2**68 is not exactly representable, and that 9007199254740992 is inside the safe range"
+    },
+    {
+      "commit": "e2327b221efd5dc71cbabbc7c02df1726edf6160",
+      "what_changed_after_it": "the profile decided admission on the exact decimal token; it decides on the binary64 value RFC 8785 serializes, which differs by one ulp at 9007199254740991.5"
+    }
+  ],
+  "files": {
+    "README.md": "sha256:62ce0d0702bfa093f4e6daf9bc659e49870529fb3854350f2f1251a6a8bd3e09",
+    "jcs-number-vectors.json": "sha256:73cd1b52ec58df51a8e5fb7d167b9da0fb70ae5b7eacec6b922d360442b52ec5",
+    "run_vectors.py": "sha256:08939dc9b5edbe8cf5381baa74ea7fcd5d0db50fce50f54533041c305877c1ba"
+  }
+}
