@@ -1,6 +1,8 @@
 # Anchored Evidence for SAFE
 
-A proposed addition to the Shared AI Findings Exchange: external anchoring of preserved incident evidence, and an offer to contribute a working reference registry to the Open Secure AI Alliance.
+A proposed addition to the Shared AI Findings Exchange: independently checkable anchoring of preserved incident evidence, with a public reference registry available for evaluation.
+
+Status: proposed, not adopted. Implementation status below was checked on September 15, 2026. This revision incorporates review discussion; it does not establish an Alliance acceptance decision.
 
 # Background
 
@@ -26,7 +28,7 @@ A reviewer should be able to establish, without trusting the member under review
 
 Call this anchoring. A member computes a digest of an evidence item, publishes that digest to a record it cannot retroactively alter, and retains a proof linking the two. Later, a reviewer holding the evidence and the proof recomputes the digest and checks it against the published record.
 
-The published record contains no evidence. It contains a hash, a timestamp, and a count.
+The public entry carries a batch root, a claimed timestamp, a count, and producer/batch metadata; it does not carry the evidence payload. Inclusion alone does not authenticate the timestamp. The reviewer also needs an independently checkable basis for the timing and history claims, described below.
 
 # Why this fits SAFE specifically
 
@@ -34,124 +36,129 @@ Three features of the current draft make anchoring more useful here than in a ge
 
 **The timelines create a window.** SAFE gives four business days for an initial confidential report, thirty for a preliminary factual report, and ninety for remediation status. Throughout that window the evidence sits with the member, and the questions the review will ask become progressively clearer. Anchoring at the time of the incident fixes the evidence before the member can know what the review will focus on. The value comes precisely from anchoring early, which is the moment a member has the least idea what will matter.
 
-**Confidentiality is preserved, not traded away.** SAFE's disclosure model moves from confidential rapid alert to de-identified advisory to public report, and members may face legal or investigative constraints at every stage. A hash publishes nothing. A member can anchor evidence on day zero of an incident that they are not permitted to describe for ninety days, or ever. The confidentiality model and the verifiability requirement do not have to be traded against each other, which is usually the reason frameworks drop verifiability.
+**Payload disclosure can be separated from anchoring.** A member can publish a digest while retaining the evidence privately. That does not make publication free of disclosure risk: hashes of guessable material can support confirmation attacks, and producer identifiers and timing can reveal relationships. The disclosure model needs to account for those risks before any public anchor is written.
 
-**Near misses become cheap to record.** The Reporting Compact requires reporting near misses, not only events producing confirmed harm. Near misses are exactly the class of event where the incentive to preserve evidence is weakest, because nothing went wrong and the work has no visible payoff. Anchoring costs a hash. A member can anchor near-miss evidence as a matter of routine and decide later whether it is reportable.
+**Near misses become cheap to record.** The Reporting Compact requires reporting near misses, not only events producing confirmed harm. Near misses are exactly the class of event where the incentive to preserve evidence is weakest, because nothing went wrong and the work has no visible payoff. A member can anchor near-miss evidence routinely and decide later whether it is reportable. This still requires collection, retention, and operation of an anchoring service; it does not create a missing near-miss detection or reporting trigger.
 
 # The mechanism
 
-The construction below follows RFC 6962, the Certificate Transparency Merkle tree. It is specified in full at `docs/anchor-format.md` in the reference implementation, and a conforming verifier can be written from that document alone.
+The batch tree follows the [RFC 6962 construction](https://www.rfc-editor.org/rfc/rfc6962.html#section-2.1). The [reference format](https://github.com/agentrust-io/trace-spec/blob/main/spec/registry-anchor-v1.md) describes the original sorted-key profile. The registry's [construction documentation](https://github.com/agentrust-io/trace-registry/blob/main/docs/anchor-format.md) and [entry schema](https://github.com/agentrust-io/trace-registry/blob/main/schema/registry-entry.schema.json) describe the current implementation's additive fields. These documents are not yet fully synchronized; this RFC does not treat the older five-field table as the complete current schema.
 
-**Leaf.** The unit of anchoring is the complete signed evidence object, signature included. Anchoring binds the signed artifact rather than a pre-signature payload, so a change to either the body or the signature breaks the anchor.
+**Leaf.** The unit is the complete signed evidence object, including its signature. For the current implementation:
 
 ```
-leaf = SHA-256(0x00 || canonical_bytes)
+leaf = SHA-256(0x00 || leaf_bytes)
 ```
 
-**Tree.** Interior nodes are `SHA-256(0x01 || left || right)` over 32-byte child hashes. Construction proceeds level by level over the ordered leaves. When a level has an odd number of nodes the final node is promoted unchanged rather than duplicated, which yields the same tree as the RFC 6962 recursive split at the largest power of two. The `0x00` and `0x01` prefixes are domain separation and prevent an interior node being presented as a leaf. An empty batch is invalid and must be rejected.
+The entry's `canonicalization_id` selects how `leaf_bytes` is obtained:
 
-**Entry.** Each anchored batch is one line of newline-delimited JSON in a dated file, with six fields:
+- `sorted-key`: sorted-key ASCII JSON under the reference profile, which excludes non-integer numbers and integers outside the safe-integer range.
+- `as-transmitted`: the exact signed bytes, without reserialization.
+
+The two constructions bind different representations. A sorted-key proof binds the canonical representation, not every original whitespace or property-order choice. An as-transmitted proof binds the retained bytes. A verifier must retain the appropriate representation and must not silently substitute the signing canonicalizer.
+
+**Tree.** Interior nodes are `SHA-256(0x01 || left || right)` over 32-byte child hashes. An unmatched final node is promoted unchanged rather than duplicated. The leaf and interior prefixes separate the two node types. Empty batches are rejected.
+
+**Entry.** The current implementation uses newline-delimited JSON. The following lists its basic batch fields; optional checkpoint fields are defined in the linked schema.
 
 | Field | Type | Meaning |
 | ----- | ---- | ------- |
-| `ts` | string | Anchoring time, ISO-8601 UTC |
+| `ts` | string | Publisher's claimed anchoring time, ISO-8601 UTC |
 | `merkle_root` | string | `sha256:` followed by 64 lowercase hex characters |
-| `leaf_count` | integer | Number of leaves in the batch, at least 1 |
-| `canonicalization` | string | Identifier of the rule that produced this batch's leaves |
-| `producer` | string | Party that produced and submitted the batch |
-| `batch_id` | string | Producer-scoped unique identifier |
+| `leaf_count` | integer | Number of leaves, at least 1 |
+| `producer` | string | Registered producer identifier in the implementation |
+| `batch_id` | string | Producer-scoped batch identifier |
+| `canonicalization_id` | string | Leaf construction, `sorted-key` or `as-transmitted` |
 
-The `canonicalization` field records which rule built the leaves, in the batch itself. Declaring the rule globally by document revision is enough with a single producer and stops being enough as soon as there are two, or as soon as the rule is revised: entries from either side of the change carry the same fields and mean different things, and an entry cannot be reinterpreted after the fact. Naming the rule at write time costs one string and is the only moment the information is available for free.
+The earlier draft called the construction field `canonicalization`. This revision uses the implemented name, `canonicalization_id`. For historical entries that omit it, the reference implementation infers `sorted-key`, the construction used before the field existed. That is a documented compatibility rule, not permission to guess an unknown identifier or reinterpret an old entry under a new construction.
 
-Entries are append-only. Files are never rewritten. In the reference implementation the version-control history is the tamper-evidence layer, because rewriting a published entry diverges the commit hashes that auditors and mirrors have already observed. A JSON Schema is enforced in CI on every line of every registry file.
+**Verification.** A reviewer needs the evidence representation, inclusion proof, and batch entry to check inclusion. Producer-key trust, signatures, authenticated timing, and history consistency are separate checks. The published `trace-verify` tooling exposes inclusion/signature, chain, and witness-receipt checks. The witness check has additional dependencies; the package should no longer be described as entirely standard-library-only.
 
-**Verification.** A reviewer needs three things: the evidence item, the inclusion proof, and the registry entry for the batch. The reference verifier is a single standard-library file, written that way so it can be audited rather than trusted.
+Append-only history must be supported by retained observations, checkpoints, or independently held copies. Git history alone cannot expose a rewrite to a first-time observer who has no earlier or independent view.
 
-# One specification detail worth stating in the open
+# Canonicalization and the proposed number admission profile
 
-A record is usually canonicalized twice for different purposes, and the two canonicalizations are not interchangeable even when they often agree.
+Signing and anchor-leaf construction are separate layers. TRACE signing uses RFC 8785 JCS; the current registry leaf constructions above are not JCS. The earlier claim that cross-language floating-point serialization cannot be canonical was incorrect: [RFC 8785 section 3.2.2.3](https://www.rfc-editor.org/rfc/rfc8785.html#section-3.2.2.3) specifies ECMAScript number serialization. The sorted-key profile's number exclusion is a profile constraint, not a general limitation of JCS.
 
-In the reference implementation the signature pre-image uses RFC 8785 JCS, while the anchor leaf uses sorted-key ASCII JSON. Those two agree for records whose keys and strings are ASCII and whose numbers are integers, which describes most records and is exactly why the divergence is dangerous. They part company in at least three places. RFC 8785 emits non-ASCII characters where the anchor format escapes them. RFC 8785 applies ECMAScript number serialization where the anchor format excludes non-integer numbers entirely, because cross-language float serialization is not canonical. RFC 8785 orders object keys by UTF-16 code unit where the anchor format orders by Unicode code point.
+The discussion developed candidate material for a possible JCS leaf profile. It separates number serialization from evidence admission. In the proposed `safe-integer-admission` profile, admission is decided on the IEEE 754 binary64 value used by JCS: reject non-finite values and integer-valued values outside `[-(2^53 - 1), 2^53 - 1]` before canonicalization and hashing. A host language's integer/float type or the token's decimal spelling does not replace that rule. Exact quantities requiring a different numeric representation need an explicit encoding, such as a string.
 
-A verifier must use the canonicalization declared for the context it is checking. Reusing one for the other is non-conforming even when a particular record happens to produce identical bytes. For the anchor leaf that declaration is the entry's `canonicalization` field, so a verifier reads the rule off the batch rather than inferring it from the document revision in force when the batch was written.
+The [candidate vectors at 8783ca10](https://github.com/lywinged/RFCs/tree/8783ca1036a16d0f7b497275e68997181ac73dcd/conformance/jcs-numbers) and [September 5 reproduction report](https://github.com/OpenSecureAIAlliance/RFCs/pull/18#issuecomment-5555129338) distinguish fourteen serialization cases from twenty-seven admission cases. These are reported numeric-primitive results, not a full JCS verifier, an end-to-end registry test, or an adopted SAFE requirement.
 
-Any evidence framework SAFE adopts will hit this. It is raised here because it is the class of defect that passes every test written by the implementer and fails the first time a second organization writes its own verifier, which is the moment independent verification was supposed to start working.
+This revision does not change existing leaf hashes, register a JCS construction, or merge the candidate test bundle. Selection of a new leaf profile and its admission rules remains a working-group decision. Existing entries retain their original construction.
 
-# What anchoring proves, and what it does not
+# What anchoring proves and what it does not
 
-Stating the limits precisely matters more than the mechanism, because an overstated assurance property is worse than none.
+**Inclusion proves membership under a particular root.** It establishes that the evidence representation selected by the declared construction is a leaf in that batch, under the hash assumptions. It does not independently establish an honest wall-clock timestamp, append-only publication, or a single history seen by everyone.
 
-**Inclusion proves that the exact bytes provided were recorded at the entry's timestamp and cannot be quietly un-recorded.** That is the whole claim.
+**Timing and history need their own evidence.** Identify the checkpoint or timestamp witness, trusted keys, retained observations, and consistency checks actually used. A timestamp asserted by the registry operator is not automatically an independently authenticated time. A single receipt does not establish continuity or rule out split views; see [RFC 6962 section 7.3](https://www.rfc-editor.org/rfc/rfc6962.html#section-7.3).
 
-It does not validate a signature against a producer key. That is a separate step against the producer's published keys.
+**Signatures and truth remain separate.** Inclusion does not verify the producer signature or determine whether its key belongs to the claimed producer. A valid signature and anchor can still accompany false evidence.
 
-It does not establish that the anchored evidence is true. A member can anchor an inaccurate record, and the anchor will faithfully prove they recorded that inaccuracy at that time. What it removes is the ability to revise it later without detection.
+**Anchoring does not establish completeness.** A member can omit events, start collection late, or anchor only a subset. Anchored run boundaries may help expose gaps within a declared capture model, but cannot by themselves prove that collection could not be bypassed or that all events were recorded.
 
-**It does not establish completeness.** This is the most important limit and it is the one raised in issue #11 by @bobleer. Anchoring what you have does not prove you anchored everything you had. A member can begin anchoring after the interesting action and present a continuous, correctly proven chain of everything after it. Anchoring is a necessary component of a completeness argument and is not one by itself. It becomes one only when run boundaries are themselves anchored, so that a missing interval is visible as a gap rather than as an absence.
-
-It does not authenticate the recording environment. A record anchored from a runtime the member modified is an unalterable record of whatever that runtime chose to write. Anchoring narrows the window during which evidence can be shaped, from the full ninety-day review period down to the moment of recording. It does not close it.
-
-**Nor does a hardware attestation of that environment close it.** Where the producer-basis field below carries `attested`, a reviewer can check which code was resident when the evidence was written, which is a materially stronger position than a version string. It is still not custody-grade against the party that owns the machine. Published physical attacks against the memory bus recover secrets from SEV-SNP and TDX environments, so attestation raises the cost against a remote or software adversary and does not close it against a member with physical access to their own hardware. `attested` should be read as a stronger basis than the alternatives, never as proof.
+**Attestation does not supply the missing properties automatically.** A reviewer must appraise measurements under declared roots and reference values, check freshness, and establish the binding to the producer key and evidence-producing instance. Attestation is not continuous observation of every event and does not establish complete capture or correct policy decisions. Physical-access exclusions and platform assumptions must be stated in the threat model; see the [RATS trust model](https://www.rfc-editor.org/rfc/rfc9334.html#section-7) and [freshness discussion](https://www.rfc-editor.org/rfc/rfc9334.html#section-10.4).
 
 # Proposed additions to the draft
 
 **Evidence Preservation.** Add to the required properties of preserved evidence, alongside the existing list of contents:
 
-> For each preserved evidence item, members should record its anchoring status: `anchored`, where a digest of the item was published to an external append-only record at a stated time and an inclusion proof is retained and provided alongside the item; `unanchored`, where the item was preserved but its existence at a given time cannot be independently established; or `unavailable`, where anchoring status cannot be determined.
+> For each preserved evidence item, members should record its anchoring status: `anchored`, where an inclusion proof and an independently checkable basis for the claimed timing and history are retained and provided alongside the item; `unanchored`, where the item is preserved but those properties cannot be independently established; or `unavailable`, where the status cannot be determined. The report should identify the leaf construction, checkpoint or witness, trusted keys, and checks actually performed. Valid inclusion with only an operator-asserted timestamp must not be silently upgraded to independently established time.
 
 The requirement is that the status is stated, not that it is `anchored`. Most members will not anchor initially, and mandating it would either exclude them or produce false declarations. An unanchored item remains usable evidence provided it is labelled as such. A reviewer weighing a member's account against a third party's needs to know which parts of that account are independently fixed in time and which rest on the member's word, and today the framework gives them no way to tell.
 
-**Producer basis.** Anchoring establishes when evidence came into being. It says nothing about who produced it, and the two are independent. @victor-davidenko raised in discussion that a field asserting the producer was "independent" would be a declaration made by the party whose independence is in question, which adds vocabulary without adding verifiable trust. That is correct, so this proposal does not ask members to declare a conclusion. It asks them to state the basis, and leaves the conclusion to the reviewer:
+**Producer basis.** Producer relationship, signing control, certification, runtime attestation, and temporal anchoring are composable dimensions. The earlier ordered `self` / `distinct-party` / `certified` / `attested` field conflated them. This revision proposes reporting the supporting evidence separately, following the [September 4 review](https://github.com/OpenSecureAIAlliance/RFCs/pull/18#issuecomment-5547780665):
 
-> For each preserved evidence item, members should record the basis on which its producer's independence rests: `self`, produced and signed by the member under review, with no independence claimed; `distinct-party`, signed by a key demonstrably not controlled by the member under review; `certified`, signed by a producer whose architecture was evaluated before the evidence was produced, with the certification chain and its validity window resolvable by the reviewer; or `attested`, where a measurement of the producing environment is carried with the evidence and verifiable against a hardware vendor root.
+- Identify the party under review, evidence producer, key custodian, permitted signing principals, and evidence supporting any claimed separation. Describe who can change signing policy or use administrative and recovery paths.
+- Where certification is offered, identify the evaluated architecture or deployment, evaluator, scope, and validity evidence.
+- Where runtime attestation is offered, retain the measurement, reference values or appraisal policy, freshness evidence, and binding to the producer key and evidence-producing instance.
+- Report temporal inclusion, timing, and history checks independently of those producer properties.
 
-Each value names an artifact a reviewer fetches and checks rather than a verdict they are asked to accept, and the values are ordered by what that check establishes rather than by how much the member is trusted. As with anchoring status, the requirement is that the basis is stated, not that it is the strong one. `self` is an honest and common answer, and a reviewer who knows an item is `self` can weight it accordingly.
+A self-operated producer may be attested; a distinct-party producer may also be certified and attested. None of these combinations proves complete capture. A key held in the reviewed party's KMS does not establish separation from that party merely because the governance platform cannot export it.
 
-Note that `certified` is not equivalent to an inclusion proof. A certificate establishes that an evaluator examined an architecture on a date. It does not establish that the instance which produced this evidence is that architecture. The limits section above states what `attested` does and does not settle on the same question.
+Where a claim depends on cooperative signing, specify what prevents either party from producing an accepted record unilaterally, including policy changes and recovery paths. A certification of the architecture does not establish that a particular running instance preserved those controls. The wire representation and conformance requirements remain proposed.
 
 **Review Framework.** The Monitoring layer asks whether operators could detect and interrupt unexpected behavior in real time. Add whether the evidence supporting that determination was anchored at the time of the events or assembled during the review. The two produce very different confidence in the same answer.
 
 **From Lessons to Controls.** Recommendations must specify a reproducible verification method and the evidence to retain. Where a recommendation's verification depends on records produced by the party being verified, that recommendation should state whether those records are anchored. A verification method whose inputs the verified party can revise is not reproducible in the sense the section intends.
 
-# Governance: why this belongs to the alliance and not to us
+# Governance and contribution scope
 
-A registry operated by the party that issues records into it is not an independent registry. This is the central weakness of the reference implementation and there is no version of the argument in which we resolve it ourselves.
+The public reference registry is available for evaluation under its published licenses: Apache-2.0 for code and CC BY 4.0 for registry data, proofs, schemas, and documentation. We are asking Alliance members to review the requirement, evaluate interoperability, and identify independent producers, mirrors, and maintainers.
 
-The implementation's own roadmap names three gaps, all of them structural rather than technical. Production claim volume from producers other than the reference gateway, where the current count is one. An independent mirror operated by someone else, because a mirror we run checks almost nothing and the value comes entirely from an operator with no incentive to cover for us. Maintainers from outside the originating company, for the same reason.
+OPAQUE currently operates the registry and produced both entries. An independently operated witness has observed one checkpoint, but there is still no independent mirror or independent production contributor. A consortium can help address these operational gaps.
 
-Each of those is a thing a consortium is for and a thing a vendor cannot supply. That is the reason this comes to the alliance as a contribution rather than as a product.
-
-We therefore offer to contribute the registry to the Open Secure AI Alliance: the anchor format specification, the reference tooling, the schema and CI validation, the mirroring documentation and checks, and the operational pipeline. The code is Apache-2.0 and the registry data is CC BY 4.0. We would prefer the alliance or its members to operate it, with mirrors held by parties who have no relationship with us, and we do not require that operation stay with us in any form.
-
-If the working group would rather specify the requirement and have members implement it independently, that is a good outcome too. The requirement is what matters. The implementation is offered because a working one shortens the argument, not because it needs to be the one adopted.
+The earlier contribution offer included operation passing to others. This revision makes its scope explicit: any ownership transfer, hosting commitment, or ongoing maintenance obligation requires a separate agreement. This RFC does not transfer TRACE specification governance or ask SAFE to adopt TRACE. The working group may specify an interoperable requirement and use other implementations.
 
 # Status of the reference implementation
 
-Stated plainly, because the alternative invites a correction later.
+As checked on September 15, 2026:
 
-The anchor format is specified and stable enough to implement against. The reference verifier is published and is standard-library only. Anchoring runs on a schedule and verifies producer signatures before anchoring anything. Mirroring is documented and checked. Schema validation runs in CI on every registry line.
+- The [repository](https://github.com/agentrust-io/trace-registry) is public. The format, reference tooling, schema validation, and scheduled anchoring pipeline are available. This update describes published artifacts; it does not report a new execution of the pipeline.
+- It holds two entries, both produced by OPAQUE: the June 12 software example and the September 1 conference demonstration. Neither is a production Trust Record. There is no independent producer or independently operated mirror.
+- Signed MMR checkpoints and chain-verification tooling are present. Checkpoint 1 covers the September entry. The June entry predates checkpointing and is outside that chain.
+- The [September 7 evidence packet](https://github.com/agentrust-io/trace-registry/tree/main/docs/evidence/witness-2026-09-07) carries an offline-verifiable receipt from an independently operated witness for checkpoint 1's signing-body digest. Its protected header does not carry a witness timestamp or signed grade; `witness_time_established` and `grade_cryptographically_bound` remain false for that capture.
+- That receipt does not certify registry continuity, prevent split views, cover the June entry, or prove payload retention. Future checkpoints are not automatically submitted to the witness. Independent observation of one checkpoint is not continuous witnessing.
+- The [limitations document](https://github.com/agentrust-io/trace-registry/blob/main/LIMITATIONS.md) distinguishes inclusion, registered producer-key trust, checkpoints, witness receipts, and operational independence.
 
-The registry currently holds one real entry, from one producer, and there is no mirror we do not operate. The machinery is live and the format is real. The volume is not there. Nothing above should be read as operating at scale, and a long gap between entries reflects claim volume rather than a stalled pipeline.
-
-The registry's own history is witnessed by version control and mirrors, which is still a record we host. Anchoring the registry into an external transparency log, so its history is witnessed by something outside it, is designed but not built.
-
-The repository is currently private and would be made public as part of this contribution.
+These artifacts support evaluation of the proposed mechanism. They do not demonstrate production scale or that the current deployment fully satisfies the independently established timing property proposed above.
 
 # Open questions for the working group
 
 **Anchoring unit.** Should members anchor individual evidence items, run boundaries, or the incident report itself? Item-level anchoring gives the finest verification granularity. Run-boundary anchoring is what makes gap detection possible. These are complementary and the working group may want both, but the requirement should say which.
 
-**Retention against append-only.** An anchor is permanent by construction. Preserved evidence is not, and members have deletion obligations under data protection law and under their own retention policies. A digest of deleted evidence persisting in a public registry is probably acceptable, since a hash of destroyed material reveals nothing and cannot be reversed. It should be examined rather than assumed, because it interacts directly with member sovereignty and the answer may differ across jurisdictions.
+**Retention against append-only.** The profile needs a retention and removal policy for public digests and metadata, separately from retained evidence payloads. Hashing is not a general guarantee of anonymity or confidentiality. The working group should obtain an appropriate privacy review rather than assume a public digest is always safe to retain.
 
 **Producer identity against de-identification.** A registry entry names its producer. SAFE's disclosure model de-identifies at the advisory stage. If a member anchors evidence during an incident and the advisory is later de-identified, the anchor timestamps may correlate with the advisory and partly undo that. Pseudonymous or rotating producer identifiers would address it at some cost to accountability, and the working group should decide where that trades out.
 
-**What certifies the evidence producer's independence.** The `certified` basis above assumes a body that evaluated the producer, but does not say who. Two different evaluations are involved and they may need different evaluators: product architecture certification, establishing that the design preserves independence, and deployment configuration certification, establishing that the running instance still does. The second is the harder one, because it is a continuous property and certification schemes sample it at audit-time intervals. This proposal names the question rather than answering it, and notes only that attestation is the one mechanism that samples the deployment half continuously, with the limit stated above. Raised by @victor-davidenko.
+**What certifies the evidence producer's independence.** The certification dimension above requires an identified evaluator but does not select a certification body. Two different evaluations are involved and they may need different evaluators: product architecture certification, establishing that the design preserves independence, and deployment configuration certification, establishing that the running instance still does. The second is the harder one, because it is a continuous property and certification schemes sample it at audit-time intervals. This proposal names the question rather than answering it. Attestation is another input to deployment appraisal, subject to the freshness and instance-binding limits above; it is not continuous observation. Raised by @victor-davidenko.
 
 **Anchoring by the reporting member or by SAFE.** A member could anchor to a public registry directly, or submit digests to SAFE which anchors on their behalf. The first requires no trust in SAFE. The second is easier for members and gives SAFE a role in establishing timing, at the cost of making SAFE a party to the record.
 
 # Relationship to existing discussion
 
 This proposal builds on issue #11 and is intended to complement rather than replace the discussion there.
+
+The authors' discussion identifies #18 as the temporal-anchoring and producer-basis component, with #27 covering linked handling, transformation, and durable acceptance. This is a proposed interface boundary. The branches remain separate and no consolidation or Alliance adoption is claimed.
 
 Issue #11 established that Evidence Preservation specifies contents without integrity properties, and its thread converged on three determinations a reviewer should be able to make: that records were not altered, that the record set is continuous or its gaps declared and bounded, and that the point at which recording began was fixed independently of the operating member. External anchoring was named there as a requirement, by @bobleer, without a mechanism attached. This proposal supplies one and takes no position on the other two.
 
@@ -163,6 +170,6 @@ Issue #4 concerns verification methods that fail open. An anchored record of a v
 
 # Disclosure
 
-Submitted by Imran Siddique, Opaque Systems. Opaque Systems maintains TRACE, an open specification for verifiable agent evidence records, and the reference registry described here. TRACE is not an adopted standard at any body and this proposal does not ask the alliance to adopt it. The registry is offered as a contribution, including operation and maintenance passing to others, because an accountability layer operated by its own largest producer is the specific thing that does not work.
+Submitted by Imran Siddique, OPAQUE Systems. OPAQUE maintains TRACE and the reference registry described here. This proposal does not claim standards-body adoption of TRACE or ask the Alliance to adopt it. The reference implementation is offered for evaluation under its published licenses, with any operational or ownership transition subject to a separate agreement.
 
 The RFC 6962 construction described here is not our invention. Certificate Transparency has run this design in production for a decade, and the contribution is the application to agent incident evidence, not the cryptography.
