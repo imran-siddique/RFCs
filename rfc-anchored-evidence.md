@@ -129,6 +129,8 @@ OPAQUE currently operates the registry and produced both entries. An independent
 
 The earlier contribution offer included operation passing to others. This revision makes its scope explicit: any ownership transfer, hosting commitment, or ongoing maintenance obligation requires a separate agreement. This RFC does not transfer TRACE specification governance or ask SAFE to adopt TRACE. The working group may specify an interoperable requirement and use other implementations.
 
+**Candidate artifact review.** Material published with this proposal may use provisional manifest categories such as `normative_expectation`, `candidate_test`, and `implementation_observation`; those names are descriptive pending working-group vocabulary. Every item should carry exact artifact identity and provenance, and every review record should link to the exact immutable artifact revision it assessed. A candidate test records applicable inputs, expected outcomes, and reproducible checks. An implementation observation records the exact implementation revision, execution environment, measurement method, limitations, and any unknowns explicitly. Publishing an artifact, recording its review outcome, and adopting a normative rule are separate decisions. Review of an implementation observation does not adopt the observed behavior.
+
 # Status of the reference implementation
 
 As checked on September 15, 2026:
