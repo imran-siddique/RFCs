@@ -1,0 +1,162 @@
+# JCS number-serialization conformance vectors
+
+Written for the discussion on `OpenSecureAIAlliance/RFCs#18`, covering the areas
+RFC 8785 Appendix B does not: the exponent's leading zero, the thresholds at each
+end where positional notation gives way to exponential, and the integer domain.
+
+    python run_vectors.py jcs-number-vectors.json
+
+Point `serialize` in the runner at any implementation. It defaults to the
+`rfc8785` package if that is installed. Two suites: fourteen settled
+serialization vectors, and an admission profile of twenty-seven cases that says
+which JSON numbers an evidence object may carry at all.
+
+## Why the expected values can be trusted
+
+Three independent oracles agree on all fourteen settled vectors:
+
+1. `rfc8785` (Python) 0.1.4
+2. V8 22.22.2, which RFC 8785 section 3.2.2.3 names as a reference implementation
+3. A formatter written from ECMA-262 section 7.1.12.1, taking only the
+   shortest-round-trip digits from the host and applying the format rules directly
+
+All three reproduce the single Appendix B entry available: IEEE 754 hex
+`4430000000000000` serializes as `295147905179352830000`.
+
+## Why the vectors are believed to measure something
+
+Eight plausible-but-wrong serializers were run against the whole set, and every
+vector fails at least one of them. A vector that no wrong implementation fails is
+not evidence and was not kept.
+
+    host-language-repr          fails 8 of 14
+    exact-binary-expansion      fails 12 of 14
+    precision-15-significant    fails 10 of 14
+    exponent-without-plus       fails 11 of 14
+    subnormal-flushed-to-zero   fails  9 of 14
+    exponent-padded-to-two      fails  8 of 14
+    negative-zero-passthrough   fails  8 of 14
+    json-dumps-default          fails  8 of 14
+
+Each vector carries the list of which ones it catches.
+
+## Inputs are IEEE 754 hex
+
+Following Appendix B's own convention. This is not a style preference. A float
+written as a JSON literal has already been through a parser before any
+implementation under test sees it, so a vector specified that way is testing the
+reading parser as much as the serializer.
+
+## Two suites, and why they are separate
+
+A serialization vector says what bytes RFC 8785 produces for a value. An
+admission case says whether an evidence profile accepts that value at all. Six
+of the fourteen settled vectors, `1e16`, `1e20`, `9.999999999999999e20`, `1e21`,
+`1e100` and the maximum double, serialize correctly and are integer-valued
+doubles above the safe range, so under the admission rule below they are not
+admissible. A serializer test passing is not evidence that a profile admits the
+input. Keeping the two apart is what makes both checkable.
+
+## The admission profile
+
+Proposed on `OpenSecureAIAlliance/RFCs#18`, not adopted by the working group.
+The rule:
+
+> Every JSON number in an evidence object is taken as the IEEE 754 binary64
+> value RFC 8785 serializes; a token that does not convert to a finite double is
+> rejected. Every integer-valued such value, whatever the token's spelling or
+> the host's numeric type, lies within -9007199254740991 to 9007199254740991,
+> and a verifier that finds one outside that range rejects the object before
+> canonicalizing it. Values that are not integer-valued are outside this rule.
+
+The bound is 2\*\*53 - 1 rather than 2\*\*53 because a verifier whose only number
+type is the double sees the parsed value, not the instance: it reads
+`9007199254740993` as `9007199254740992`, and under a bound of 2\*\*53 would
+admit the one value the range exists to exclude. Spelling does not decide
+admission, value does: `9007199254740992.0` and `9.007199254740992e15` are the
+same value as `9007199254740992` and are rejected with it, and their negative
+counterparts likewise. Since every double of magnitude 2\*\*53 or more is
+integer-valued, the rule admits no JSON number of that magnitude.
+
+## The domain is the double, not the token
+
+Admission is decided on the binary64 value, the representation RFC 8785 sections
+3.1 and 3.2.2.3 serialize, and not on the decimal token. The two differ just
+outside the safe range. `9007199254740991.5` is not an integer as a decimal and an
+exact-decimal rule would admit it; as a double it rounds to `9007199254740992`,
+which is what JCS then serializes, and that value is rejected. An exact-decimal
+rule would admit an input whose canonical spelling it rejects. Deciding on the
+double keeps the admission check and the serializer on one representation. Seven
+cases pin this: four outward-rounding tokens that are rejected, two inward-rounding
+controls at `.25` that both rules admit, and `1e999`, which is not finite as a
+double and is rejected before any other test. The runner's reference check
+converts the token to a double, rejects it if not finite, then tests value and
+range; the finite-value predicate in JavaScript is
+`Number.isFinite(v) && (!Number.isInteger(v) || Number.isSafeInteger(v))`.
+
+## What shipped implementations do with out-of-range integers
+
+Kept as observations, no longer as open questions, because the profile above is
+what settles them.
+
+Appendix B note 2 settles what the algorithm does: even where an integer like
+`2**68` could be regarded as having extended precision, the serialization does not
+take that into consideration. It is a double. `2**68` itself is a power of two
+and exactly representable; what the algorithm changes is the spelling, since the
+shortest decimal that round-trips to that double, `295147905179352830000`, read
+back as an integer is 4144 short. That is a reason to carry such a value as a
+string, per Appendix D, not a floating-point loss.
+
+Three behaviours were observed for the same input, a field value of
+`9007199254740993`. Only the first is conformant:
+
+| implementation | canonical form | outcome |
+|---|---|---|
+| **conformant**: converts to a double, for example V8 | `9007199254740992` | lands on 2\*\*53, just outside the safe range |
+| non-conformant: a big-integer language that skips the conversion, for example Python `int` | `9007199254740993` | exact, and diverges silently from the above |
+| non-conformant: `rfc8785` (Python) 0.1.4 | refused | `IntegerDomainError` at exactly 2\*\*53 |
+
+The first produces a collision: `9007199254740992` and `9007199254740993` are
+different values that canonicalize to identical bytes and therefore one leaf hash,
+`3f9d3e6edd300dd569ec99916ec6270597c7b07cea1602f4ce5216b01bac65ff` for
+`{"agent_id":"a","seq":N}` under RFC 6962 leaf hashing, reproduced in V8 22.22.2
+and Node 24. The second produces divergence: two implementations, neither
+raising, computing different leaf hashes for the same object. The third refuses
+and so does neither, which means the implementation that deviates from the spec
+is the fail-closed one.
+
+A collision is at least visible to one party holding two objects and one hash.
+Divergence is two parties computing different proofs for the same object, each
+certain it is right, which is the failure the RFC already names: it passes every
+test the implementer writes and fails the first time a second organization writes
+its own verifier.
+
+Conforming exactly is not sufficient here, which is why the range is stated as a
+constraint on the evidence object rather than left to a SHOULD aimed at producers.
+
+The two-suite split, the binary64 domain and two corrections to the earlier text, that `2**68` is
+exactly representable and that `9007199254740992` sits outside the safe range,
+came from review on `OpenSecureAIAlliance/RFCs#18`.
+
+## Bundle identity
+
+This directory is a candidate bundle. Its identifier is `jcs-numbers/v0.1.0-candidate.1`, recorded
+in `MANIFEST.json` along with the sha256 of every other file here and the identifier of the
+profile the set exercises.
+
+A published revision takes a new candidate identifier and preserves the prior commit, so a
+citation of one identifier keeps pointing at the bytes it was written against. The commits this
+identifier supersedes are listed in the manifest with what each of them got wrong.
+
+Nothing here is adopted. The admission profile carries its own `status` field saying so, and the
+manifest repeats it, because a bundle that travels separately from the thread it was proposed in
+should not need the thread to say what it claims.
+
+To check the files against the manifest:
+
+```
+python3 -c "import hashlib,json,pathlib;m=json.load(open('MANIFEST.json'));[print(('ok  ' if 'sha256:'+hashlib.sha256(pathlib.Path(n).read_bytes()).hexdigest()==v else 'FAIL'),n) for n,v in m['files'].items()]"
+```
+
+The manifest does not contain its own digest. That digest is what a citation pins, so it is
+published where the bundle is cited rather than inside it.

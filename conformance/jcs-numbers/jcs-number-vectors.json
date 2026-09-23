@@ -1,0 +1,600 @@
+{
+  "about": "Conformance vectors for RFC 8785 JCS number serialization, covering the areas Appendix B does not.",
+  "generated_against": "rfc8785 (Python) 0.1.4, cross-checked against V8 22.22.2 and an independent formatter written from ECMA-262 7.1.12.1",
+  "input_encoding_note": "Double inputs are given as IEEE 754 big-endian hex, following the convention of RFC 8785 Appendix B, so a vector does not depend on the parser that reads it. The literal is a convenience and is not authoritative.",
+  "settled": [
+    {
+      "name": "upper-threshold-last-positional",
+      "why": "ECMA-262 7.1.12.1 uses positional notation while the decimal exponent is at most 21. This is the largest double below 1e21 and the value named in the thread.",
+      "input": {
+        "kind": "double",
+        "ieee754_be_hex": "0x444B1AE4D6E2EF4F",
+        "literal": "9.999999999999999e+20"
+      },
+      "expect": "999999999999999900000",
+      "catches": [
+        "host-language-repr",
+        "exponent-padded-to-two",
+        "negative-zero-passthrough",
+        "json-dumps-default",
+        "exponent-without-plus",
+        "exact-binary-expansion",
+        "subnormal-flushed-to-zero",
+        "precision-15-significant"
+      ]
+    },
+    {
+      "name": "upper-threshold-first-exponential",
+      "why": "The next representable step up crosses into exponential form. The pair is the whole boundary; either alone tests nothing.",
+      "input": {
+        "kind": "double",
+        "ieee754_be_hex": "0x444B1AE4D6E2EF50",
+        "literal": "1e+21"
+      },
+      "expect": "1e+21",
+      "catches": [
+        "exponent-without-plus",
+        "exact-binary-expansion"
+      ]
+    },
+    {
+      "name": "upper-positional-1e20",
+      "why": "Well inside positional. Guards against an implementation that switches to exponential too early, which is what Python's own repr does at 1e16.",
+      "input": {
+        "kind": "double",
+        "ieee754_be_hex": "0x4415AF1D78B58C40",
+        "literal": "1e+20"
+      },
+      "expect": "100000000000000000000",
+      "catches": [
+        "host-language-repr",
+        "exponent-padded-to-two",
+        "negative-zero-passthrough",
+        "json-dumps-default",
+        "exponent-without-plus",
+        "subnormal-flushed-to-zero",
+        "precision-15-significant"
+      ]
+    },
+    {
+      "name": "upper-positional-1e16",
+      "why": "Python repr gives 1e+16 here. An implementation built on the host language's float repr fails this one and passes almost everything else.",
+      "input": {
+        "kind": "double",
+        "ieee754_be_hex": "0x4341C37937E08000",
+        "literal": "1e+16"
+      },
+      "expect": "10000000000000000",
+      "catches": [
+        "host-language-repr",
+        "exponent-padded-to-two",
+        "negative-zero-passthrough",
+        "json-dumps-default",
+        "exponent-without-plus",
+        "subnormal-flushed-to-zero",
+        "precision-15-significant"
+      ]
+    },
+    {
+      "name": "lower-threshold-last-positional",
+      "why": "Positional while the exponent is at least -6. 1e-6 is the last positional value at the small end.",
+      "input": {
+        "kind": "double",
+        "ieee754_be_hex": "0x3EB0C6F7A0B5ED8D",
+        "literal": "1e-06"
+      },
+      "expect": "0.000001",
+      "catches": [
+        "host-language-repr",
+        "exponent-padded-to-two",
+        "negative-zero-passthrough",
+        "json-dumps-default",
+        "exponent-without-plus",
+        "exact-binary-expansion",
+        "subnormal-flushed-to-zero",
+        "precision-15-significant"
+      ]
+    },
+    {
+      "name": "lower-threshold-first-exponential",
+      "why": "First value that goes exponential at the small end, and the first place a leading zero can appear in the exponent.",
+      "input": {
+        "kind": "double",
+        "ieee754_be_hex": "0x3E7AD7F29ABCAF48",
+        "literal": "1e-07"
+      },
+      "expect": "1e-7",
+      "catches": [
+        "host-language-repr",
+        "exponent-padded-to-two",
+        "negative-zero-passthrough",
+        "json-dumps-default",
+        "exponent-without-plus",
+        "exact-binary-expansion",
+        "subnormal-flushed-to-zero",
+        "precision-15-significant"
+      ]
+    },
+    {
+      "name": "exponent-no-leading-zero-single-digit",
+      "why": "Appendix B does not cover the exponent's leading zero. A formatter that pads to two digits emits 1.5e-07 here.",
+      "input": {
+        "kind": "double",
+        "ieee754_be_hex": "0x3E8421F5F40D8376",
+        "literal": "1.5e-07"
+      },
+      "expect": "1.5e-7",
+      "catches": [
+        "host-language-repr",
+        "exponent-padded-to-two",
+        "negative-zero-passthrough",
+        "json-dumps-default",
+        "exponent-without-plus",
+        "exact-binary-expansion",
+        "subnormal-flushed-to-zero",
+        "precision-15-significant"
+      ]
+    },
+    {
+      "name": "exponent-no-leading-zero-1e-9",
+      "why": "Second single-digit negative exponent, so a padding bug is not mistaken for an off-by-one at the threshold.",
+      "input": {
+        "kind": "double",
+        "ieee754_be_hex": "0x3E112E0BE826D695",
+        "literal": "1e-09"
+      },
+      "expect": "1e-9",
+      "catches": [
+        "host-language-repr",
+        "exponent-padded-to-two",
+        "negative-zero-passthrough",
+        "json-dumps-default",
+        "exponent-without-plus",
+        "exact-binary-expansion",
+        "subnormal-flushed-to-zero",
+        "precision-15-significant"
+      ]
+    },
+    {
+      "name": "exponent-two-digit-negative",
+      "why": "Three-digit exponent, no padding question. Present so a failure on the single-digit cases is isolated to padding.",
+      "input": {
+        "kind": "double",
+        "ieee754_be_hex": "0x2B2BFF2EE48E0530",
+        "literal": "1e-100"
+      },
+      "expect": "1e-100",
+      "catches": [
+        "exact-binary-expansion"
+      ]
+    },
+    {
+      "name": "exponent-two-digit-positive",
+      "why": "Positive exponents carry a plus sign and no leading zero.",
+      "input": {
+        "kind": "double",
+        "ieee754_be_hex": "0x54B249AD2594C37D",
+        "literal": "1e+100"
+      },
+      "expect": "1e+100",
+      "catches": [
+        "exponent-without-plus",
+        "exact-binary-expansion"
+      ]
+    },
+    {
+      "name": "negative-zero",
+      "why": "JCS emits 0 for negative zero. An implementation that round-trips through a naive formatter emits -0.",
+      "input": {
+        "kind": "double",
+        "ieee754_be_hex": "0x8000000000000000",
+        "literal": "-0.0"
+      },
+      "expect": "0",
+      "catches": [
+        "host-language-repr",
+        "exponent-padded-to-two",
+        "negative-zero-passthrough",
+        "json-dumps-default",
+        "exponent-without-plus",
+        "exact-binary-expansion",
+        "subnormal-flushed-to-zero",
+        "precision-15-significant"
+      ]
+    },
+    {
+      "name": "simple-fraction",
+      "why": "Shortest round-trip, not the exact binary value. Guards against an implementation printing 0.1000000000000000055511151231257827.",
+      "input": {
+        "kind": "double",
+        "ieee754_be_hex": "0x3FB999999999999A",
+        "literal": "0.1"
+      },
+      "expect": "0.1",
+      "catches": [
+        "exact-binary-expansion"
+      ]
+    },
+    {
+      "name": "max-double",
+      "why": "Largest finite double.",
+      "input": {
+        "kind": "double",
+        "ieee754_be_hex": "0x7FEFFFFFFFFFFFFF",
+        "literal": "1.7976931348623157e+308"
+      },
+      "expect": "1.7976931348623157e+308",
+      "catches": [
+        "exponent-without-plus",
+        "exact-binary-expansion",
+        "precision-15-significant"
+      ]
+    },
+    {
+      "name": "min-subnormal",
+      "why": "Smallest positive subnormal.",
+      "input": {
+        "kind": "double",
+        "ieee754_be_hex": "0x0000000000000001",
+        "literal": "5e-324"
+      },
+      "expect": "5e-324",
+      "catches": [
+        "exact-binary-expansion",
+        "subnormal-flushed-to-zero",
+        "precision-15-significant"
+      ]
+    }
+  ],
+  "admission_profile": {
+    "name": "safe-integer-admission",
+    "status": "proposed on OpenSecureAIAlliance/RFCs#18; not adopted by the working group",
+    "rule": "Every JSON number in an evidence object is taken as the IEEE 754 binary64 value RFC 8785 serializes; a token that does not convert to a finite double is rejected. Every integer-valued such value, whatever the token's spelling or the host's numeric type, lies within -9007199254740991 to 9007199254740991, and a verifier that finds one outside that range rejects the object before canonicalizing it. Values that are not integer-valued are outside this rule. Since every double of magnitude 2**53 or more is integer-valued, the rule admits no JSON number of that magnitude.",
+    "why_separate_from_the_serializer_suite": "A serialization vector says what bytes RFC 8785 produces for a value. An admission case says whether an evidence profile accepts that value at all. Six of the fourteen settled vectors serialize correctly and are not admissible here, so a serializer test passing is not evidence that the profile admits the input.",
+    "reference_check": "Convert the token to a double, reject it if the result is not finite, test whether the value is an integer, then test the range. The runner does this. The six rounding cases below are where an exact-decimal check would disagree; the twenty cases before them agree under both.",
+    "cases": [
+      {
+        "name": "boundary-positive",
+        "input": {
+          "kind": "json-number-token",
+          "token": "9007199254740991"
+        },
+        "why": "Largest safe integer. Admitted.",
+        "expect": "admit"
+      },
+      {
+        "name": "boundary-negative",
+        "input": {
+          "kind": "json-number-token",
+          "token": "-9007199254740991"
+        },
+        "why": "Smallest safe integer. Admitted.",
+        "expect": "admit"
+      },
+      {
+        "name": "two-to-the-53",
+        "input": {
+          "kind": "json-number-token",
+          "token": "9007199254740992"
+        },
+        "why": "First integer above the range. Rejected. Under a bound of 2**53 a double-only verifier would admit it.",
+        "expect": "reject"
+      },
+      {
+        "name": "two-to-the-53-negative",
+        "input": {
+          "kind": "json-number-token",
+          "token": "-9007199254740992"
+        },
+        "why": "Symmetric with the case above. Rejected.",
+        "expect": "reject"
+      },
+      {
+        "name": "two-to-the-53-plus-one",
+        "input": {
+          "kind": "json-number-token",
+          "token": "9007199254740993"
+        },
+        "why": "Parses to the same double as 2**53. Rejected, and a verifier cannot tell it from the case above after parsing, which is the point of the bound.",
+        "expect": "reject"
+      },
+      {
+        "name": "two-to-the-68",
+        "input": {
+          "kind": "json-number-token",
+          "token": "295147905179352825856"
+        },
+        "why": "Appendix B note (2)'s value. Rejected; carry it as a string.",
+        "expect": "reject"
+      },
+      {
+        "name": "spelling-with-fraction-zero",
+        "input": {
+          "kind": "json-number-token",
+          "token": "9007199254740992.0"
+        },
+        "why": "Same value as 2**53 with a different spelling. Rejected. The token's spelling does not decide admission; its value does.",
+        "expect": "reject"
+      },
+      {
+        "name": "spelling-exponent",
+        "input": {
+          "kind": "json-number-token",
+          "token": "9.007199254740992e15"
+        },
+        "why": "Same value as 2**53 in exponent form. Rejected.",
+        "expect": "reject"
+      },
+      {
+        "name": "spelling-exponent-negative",
+        "input": {
+          "kind": "json-number-token",
+          "token": "-9.007199254740992e15"
+        },
+        "why": "Negative counterpart. Rejected.",
+        "expect": "reject"
+      },
+      {
+        "name": "in-range-with-fraction-zero",
+        "input": {
+          "kind": "json-number-token",
+          "token": "9007199254740991.0"
+        },
+        "why": "Integer-valued, in range, spelled with a fraction. Admitted: value, not spelling.",
+        "expect": "admit"
+      },
+      {
+        "name": "one-e-sixteen",
+        "input": {
+          "kind": "json-number-token",
+          "token": "1e16"
+        },
+        "why": "Integer-valued double above the range. Rejected. Serializes fine under RFC 8785, which is why the serializer suite and this suite are separate.",
+        "expect": "reject"
+      },
+      {
+        "name": "one-e-twenty",
+        "input": {
+          "kind": "json-number-token",
+          "token": "1e20"
+        },
+        "why": "Integer-valued double above the range. Rejected.",
+        "expect": "reject"
+      },
+      {
+        "name": "upper-threshold-last-positional",
+        "input": {
+          "kind": "json-number-token",
+          "token": "9.999999999999999e20"
+        },
+        "why": "The settled vector at the positional threshold. Integer-valued double above the range. Rejected.",
+        "expect": "reject"
+      },
+      {
+        "name": "one-e-twenty-one",
+        "input": {
+          "kind": "json-number-token",
+          "token": "1e21"
+        },
+        "why": "Integer-valued double above the range. Rejected.",
+        "expect": "reject"
+      },
+      {
+        "name": "one-e-hundred",
+        "input": {
+          "kind": "json-number-token",
+          "token": "1e100"
+        },
+        "why": "Integer-valued double above the range. Rejected.",
+        "expect": "reject"
+      },
+      {
+        "name": "max-double",
+        "input": {
+          "kind": "json-number-token",
+          "token": "1.7976931348623157e308"
+        },
+        "why": "Integer-valued double above the range. Rejected.",
+        "expect": "reject"
+      },
+      {
+        "name": "fraction-half",
+        "input": {
+          "kind": "json-number-token",
+          "token": "0.5"
+        },
+        "why": "Not integer-valued. This rule does not reach it; admitted. Its bytes are the serializer suite's business.",
+        "expect": "admit"
+      },
+      {
+        "name": "fraction-twelve-and-a-half",
+        "input": {
+          "kind": "json-number-token",
+          "token": "12.5"
+        },
+        "why": "Not integer-valued. Admitted.",
+        "expect": "admit"
+      },
+      {
+        "name": "small-exponent",
+        "input": {
+          "kind": "json-number-token",
+          "token": "1e-07"
+        },
+        "why": "Not integer-valued. Admitted.",
+        "expect": "admit"
+      },
+      {
+        "name": "negative-zero",
+        "input": {
+          "kind": "json-number-token",
+          "token": "-0.0"
+        },
+        "why": "Integer-valued, in range. Admitted.",
+        "expect": "admit"
+      },
+      {
+        "name": "rounds-outward-to-two-to-the-53",
+        "input": {
+          "kind": "json-number-token",
+          "token": "9007199254740991.5"
+        },
+        "why": "Not an integer as a decimal; as a double it rounds to 9007199254740992, which is what JCS serializes. Rejected.",
+        "expect": "reject"
+      },
+      {
+        "name": "rounds-outward-negative",
+        "input": {
+          "kind": "json-number-token",
+          "token": "-9007199254740991.5"
+        },
+        "why": "Negative counterpart. Rejected.",
+        "expect": "reject"
+      },
+      {
+        "name": "rounds-outward-exponent-spelling",
+        "input": {
+          "kind": "json-number-token",
+          "token": "9.0071992547409915e15"
+        },
+        "why": "Same value in exponent form. Rejected.",
+        "expect": "reject"
+      },
+      {
+        "name": "rounds-outward-exponent-negative",
+        "input": {
+          "kind": "json-number-token",
+          "token": "-9.0071992547409915e15"
+        },
+        "why": "Negative counterpart. Rejected.",
+        "expect": "reject"
+      },
+      {
+        "name": "rounds-inward-control",
+        "input": {
+          "kind": "json-number-token",
+          "token": "9007199254740991.25"
+        },
+        "why": "Rounds inward to 9007199254740991 as a double. Admitted under both an exact-decimal and a binary64 check; the control for the pair above.",
+        "expect": "admit"
+      },
+      {
+        "name": "rounds-inward-control-negative",
+        "input": {
+          "kind": "json-number-token",
+          "token": "-9007199254740991.25"
+        },
+        "why": "Negative counterpart. Admitted.",
+        "expect": "admit"
+      },
+      {
+        "name": "not-finite",
+        "input": {
+          "kind": "json-number-token",
+          "token": "1e999"
+        },
+        "why": "Converts to infinity as a double. Rejected before any other test.",
+        "expect": "reject"
+      }
+    ],
+    "domain": "Admission is decided on the binary64 value, the same representation RFC 8785 sections 3.1 and 3.2.2.3 serialize, not on the decimal token. The two differ just outside the safe range: 9007199254740991.5 is not an integer as a decimal and admissible under an exact-decimal rule, but it rounds to 9007199254740992 as a double, which JCS would then serialize, and that value is rejected. An exact-decimal rule would admit an input whose canonical spelling it rejects. Deciding on the double keeps the admission check and the serializer on one representation."
+  },
+  "observations_on_conformant_serialization": {
+    "note": "These were the pending cases before the admission profile existed. They record what shipped implementations do with out-of-range integers under RFC 8785 itself; the admission profile above is what settles them.",
+    "cases": [
+      {
+        "name": "integer-at-safe-range-boundary",
+        "why": "Largest safe integer. Both the spec and rfc8785 0.1.4 accept it, so it is the control for the pair below.",
+        "input": {
+          "kind": "integer",
+          "decimal": "9007199254740991"
+        },
+        "expect_per_spec": "9007199254740991",
+        "observed_rfc8785_py_0_1_4": "9007199254740991",
+        "agree": true
+      },
+      {
+        "name": "integer-just-above-safe-range",
+        "why": "First integer above the safe range. RFC 8785 Appendix B note (1) says values meant as true integers SHOULD sit inside the range but that how a number is used does not affect the algorithm, so the spec serializes it. rfc8785 0.1.4 raises IntegerDomainError instead.",
+        "input": {
+          "kind": "integer",
+          "decimal": "9007199254740992"
+        },
+        "expect_per_spec": "9007199254740992",
+        "observed_rfc8785_py_0_1_4": "REFUSED (IntegerDomainError)",
+        "agree": false
+      },
+      {
+        "name": "integer-2-to-the-68",
+        "why": "The value in Appendix B note (2). 2**68 is a power of two, so the double is exact; what changes is the spelling: the shortest decimal that round-trips to that double is 295147905179352830000, and read back as an integer it is 4144 short of 295147905179352825856. That is not a floating-point loss. It is the reason an exact integer of this size belongs in a string, per Appendix D. rfc8785 0.1.4 refuses it.",
+        "input": {
+          "kind": "integer",
+          "decimal": "295147905179352825856"
+        },
+        "expect_per_spec": "295147905179352830000",
+        "observed_rfc8785_py_0_1_4": "REFUSED (IntegerDomainError)",
+        "agree": false
+      },
+      {
+        "name": "adjacent-integers-share-a-leaf",
+        "why": "The case that decides the question. 9007199254740992 and 9007199254740993 are distinct integers. Under ECMA-262 number serialization both canonicalize to 9007199254740992, so two different evidence objects produce identical canonical bytes and identical leaf hashes. Verified in V8 22.22.2 and in Node 24 / V8 13.6. The output is 2**53, just outside the safe range, which is why a bound of 2**53 - 1 rejects both parsed values and a bound of 2**53 admits both. rfc8785 0.1.4 refuses both inputs and therefore does not produce the collision, which means the deviating implementation is the fail-closed one and the conformant implementation is not.",
+        "input": {
+          "kind": "pair-of-objects",
+          "a": "{\"agent_id\":\"a\",\"seq\":9007199254740992}",
+          "b": "{\"agent_id\":\"a\",\"seq\":9007199254740993}"
+        },
+        "expect_per_spec": "both canonicalize to {\"agent_id\":\"a\",\"seq\":9007199254740992}, leaf 3f9d3e6edd300dd569ec99916ec6270597c7b07cea1602f4ce5216b01bac65ff for both",
+        "observed_rfc8785_py_0_1_4": "REFUSED (IntegerDomainError) for both",
+        "agree": false
+      },
+      {
+        "name": "conformant-serialization-of-an-integer-uses-a-double",
+        "why": "Appendix B note 2 settles what the algorithm does: even where an integer like 2**68 could be regarded as having extended precision, the serialization does not take that into consideration. It is a double. So there is one conformant answer and it is the one with the hazard in it, which is what note 1's SHOULD on producers is protecting against. A SHOULD on producers does not protect a verifier. Two shipped implementations get this wrong in opposite directions: rfc8785 0.1.4 refuses and so never produces the collision, making the deviating implementation the fail-closed one, while a big-integer language that skips the conversion prints the exact value and diverges silently from a conformant implementation on the same object. Neither of those two raises. Both produce well-formed canonical bytes. The leaf hashes differ.",
+        "input": {
+          "kind": "integer",
+          "decimal": "9007199254740993",
+          "context": "as a field value in an evidence object, for example a duration or a byte count"
+        },
+        "observed": [
+          {
+            "implementation": "conformant: convert to a double, per ECMA-262 7.1.12.1, for example V8",
+            "canonical": "9007199254740992",
+            "leaf_of_{\"duration_ns\":N}": "f7afd1c9ef1115cf3f6c221d7902b45ecf938aef40bb4bbb5fb508fcb50aacd7"
+          },
+          {
+            "implementation": "non-conformant: a big-integer language that skips the conversion, for example Python int",
+            "canonical": "9007199254740993",
+            "leaf_of_{\"duration_ns\":N}": "c33ee17dd1cabb136db8754d4cfdaafed905f330c6b3336ecf2272409076f102"
+          },
+          {
+            "implementation": "non-conformant: rfc8785 (Python) 0.1.4, refuses",
+            "canonical": "REFUSED (IntegerDomainError)",
+            "leaf_of_{\"duration_ns\":N}": null
+          }
+        ],
+        "note": "No answer asserted. What to do about a conformant collision is a question for the working group, not something a vector set should encode quietly."
+      }
+    ]
+  },
+  "how_this_set_was_checked": {
+    "method": "Each vector was run against eight plausible-but-wrong serializers. A vector that no wrong implementation fails is not evidence and was not kept.",
+    "wrong_implementations": [
+      "host-language-repr",
+      "exponent-padded-to-two",
+      "negative-zero-passthrough",
+      "json-dumps-default",
+      "exponent-without-plus",
+      "exact-binary-expansion",
+      "subnormal-flushed-to-zero",
+      "precision-15-significant"
+    ],
+    "result": "All 14 settled vectors fail at least one. Counts per wrong implementation: {'host-language-repr': 8, 'exponent-padded-to-two': 8, 'negative-zero-passthrough': 8, 'json-dumps-default': 8, 'exponent-without-plus': 11, 'exact-binary-expansion': 12, 'subnormal-flushed-to-zero': 9, 'precision-15-significant': 10}",
+    "reference": "Every expected value is the output of rfc8785 (Python) 0.1.4, not a hand-written expectation.",
+    "oracles": [
+      "rfc8785 (Python) 0.1.4",
+      "V8 22.22.2, named as a reference implementation in RFC 8785 section 3.2.2.3",
+      "an independent formatter written from ECMA-262 section 7.1.12.1"
+    ],
+    "oracle_agreement": "All three agree on all 14 settled vectors. The one Appendix B entry available, 4430000000000000, is reproduced by all three."
+  }
+}
